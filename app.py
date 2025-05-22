@@ -1,72 +1,56 @@
-from flask import Flask, render_template, redirect, url_for
+from flask import Flask, render_template, request, jsonify
 import plc
-import Robot
+import robot
 
 app = Flask(__name__)
 
-is_connected = False
-status_message = ""
+selected_robot_program = 1
+selected_camera_program = 1
 
 @app.route('/')
 def index():
-    global status_message, is_connected
-    msg = status_message
-    status_message = ""
-    return render_template('index.html', status=msg, connected=is_connected)
+    return render_template("index.html")
 
-@app.route('/connect')
-def connect():
-    global status_message, is_connected
-    try:
-        is_connected = plc.connect()
-        if is_connected:
-            status_message = "PLC connected successfully."
-        else:
-            status_message = "PLC connection failed."
-    except Exception as e:
-        is_connected = False
-        status_message = f"PLC connection error: {e}"
-    return redirect(url_for('index'))
+@app.route('/start', methods=['POST'])
+def start_sequence():
+    global selected_robot_program, selected_camera_program
 
-@app.route('/disconnect')
-def disconnect():
-    global status_message, is_connected
-    try:
-        plc.disconnect()
-        is_connected = False
-        status_message = "PLC disconnected."
-    except Exception as e:
-        status_message = f"PLC disconnect error: {e}"
-    return redirect(url_for('index'))
+    data = request.get_json()
+    selected_robot_program = int(data['robot_program'])
+    selected_camera_program = int(data['camera_program'])
 
-@app.route('/toggle')
-def toggle():
-    global status_message, is_connected
-    if not is_connected:
-        status_message = "PLC not connected! Connect first."
-        return redirect(url_for('index'))
     try:
-        new_state = plc.toggle_bit()
-        status_message = f"Bit toggled to {new_state}"
-    except Exception as e:
-        status_message = f"Toggle failed: {e}"
-    return redirect(url_for('index'))
+        robot.run_robot_program(selected_robot_program)
+        plc.write_camera_program(selected_camera_program)
+        plc.send_trigger()
+        robot.move_home()
 
-@app.route('/run_sequence')
-def run_sequence():
-    global status_message, is_connected
-    if not is_connected:
-        status_message = "PLC not connected! Connect first."
-        return redirect(url_for('index'))
-    try:
-        Robot.move_to_object()
-        plc.set_bit(True)  # e.g. take picture
-        Robot.move_home()
-        plc.set_bit(False)
-        status_message = "Full sequence executed successfully."
+        return jsonify({"message": "✅ Sequence completed successfully!"})
     except Exception as e:
-        status_message = f"Sequence error: {e}"
-    return redirect(url_for('index'))
+        return jsonify({"message": f"❌ Error: {str(e)}"}), 500
+
+@app.route('/update_status')
+def update_status():
+    robot_data = robot.get_robot_status()
+    camera_result = plc.read_camera_result()
+    plc_status = "Connected" if plc.get_status() else "Disconnected"
+
+    pose_info = ""
+    if isinstance(robot_data, dict) and "variables" in robot_data:
+        for var in robot_data["variables"]:
+            pose_info += f"<strong>{var['name']}</strong>: {var['type']}<br>"
+            if var['type'] == "jointPose":
+                pose_info += f"Joint Angles: {var['value']}<br><br>"
+            elif var['type'] == "cartesianPose":
+                pose_info += f"Position: {var['value']['position']}<br>Orientation: {var['value']['orientation']}<br><br>"
+    elif "error" in robot_data:
+        pose_info = robot_data['error']
+
+    return jsonify({
+        "robot_pose": pose_info,
+        "camera_result": camera_result,
+        "plc_status": plc_status
+    })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
