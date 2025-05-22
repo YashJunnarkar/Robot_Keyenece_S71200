@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Robot + PLC Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+</head>
+<body class="bg-light">
+  <div class="container py-5">
+    <div class="text-center mb-4">
+      <h1 class="display-5"> Robot + PLC Dashboard</h1>
+      {% if connected %}
+        <p class="text-success fw-bold"> PLC is connected</p>
+      {% else %}
+        <p class="text-danger fw-bold"> PLC is NOT connected</p>
+      {% endif %}
+    </div>
+
+    <div class="d-flex justify-content-center flex-wrap gap-3 mb-4">
+      <a href="{{ url_for('connect') }}" class="btn btn-success btn-lg">🔌 Connect PLC</a>
+      <a href="{{ url_for('disconnect') }}" class="btn btn-secondary btn-lg"> Disconnect PLC</a>
+      <a href="{{ url_for('toggle') }}" class="btn btn-warning btn-lg"> Toggle Bit</a>
+      <a href="{{ url_for('run_sequence') }}" class="btn btn-primary btn-lg"> Run Full Sequence</a>
+    </div>
+
+    {% if status %}
+      <div class="alert alert-info text-center" role="alert">
+        {{ status }}
+      </div>
+    {% endif %}
+
+    <div class="text-center mt-5">
+      <p class="text-muted">
+        Access this dashboard from your device at:<br />
+        <code>http://{{ request.host }}</code>
+      </p>
+    </div>
+  </div>
+</body>
+</html>
